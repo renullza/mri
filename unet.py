@@ -1,11 +1,9 @@
-import torch
-import os
 import random
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-import tqdm
+from tqdm import tqdm
 import time
 from glob import glob
 from itertools import chain
@@ -25,7 +23,7 @@ from PIL import Image
 
 # end of imports
 
-PATH = "/weights/model_state_dict.pt"
+PATH = "D:/projects/mri/weights/model_state_dict.pt"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available():
@@ -105,7 +103,7 @@ val_dataloader = DataLoader(val_dataset, batch_size=bs_val, shuffle=True)
 test_dataloader = DataLoader(test_dataset, batch_size=bs_test, shuffle=True)
 
 #Dice loss function 
-# read https://www.linkedin.com/pulse/in-depth-exploration-loss-functions-deep-learning-kiran-dev-yadav/ for better loss function
+# read https://www.linkedin.com/pulse/in-depth-exploration-loss-functions-deep-learning-kiran-dev-yadav/ and https://www.kaggle.com/code/monkira/brain-mri-segmentation-using-unet-keras?scriptVersionId=38106281&cellId=12 for better loss function
 def dc_loss(pred, target):
     smooth = 100
 
@@ -201,4 +199,122 @@ model = UNet().to(device)
 optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.9,0.999))
 
 #Load a preexisting set of weights if continuting training
+# model.load_state_dict(torch.load(PATH))
+
 model.load_state_dict(torch.load(PATH))
+
+#Training function 
+def train(model, epochs):
+    
+    #Keep track of average training and validation losses for each epoch
+    avg_train_losses = []
+    avg_val_losses = []
+    
+    #Trigger for earlystopping
+    earlystopping = False 
+
+    #Training loop
+    for epoch in range(epochs):
+        
+        #Record the training and validation losses for each batch in this epoch
+        train_losses = []
+        val_losses = []
+
+        model.train()
+
+        loop = tqdm(enumerate(train_dataloader), total = len(train_dataloader), leave = False)
+        for batch, (images, targets) in loop:
+
+            images = images.to(device)
+            targets = targets.to(device)
+
+            model.zero_grad()
+            pred = model(images)
+            loss = dc_loss(pred, targets)
+            loss.backward()
+            optimizer.step()
+            
+            train_losses.append(loss.item())
+                        
+            with torch.no_grad():     #Show some samples at the first batch of each epoch 
+                if batch == 1:
+                    torch.save(model.state_dict(), PATH)
+
+                    model.eval()
+
+                    (img, mask) = next(iter(test_dataloader))
+                    img = img.to(device)
+                    mask = mask.to(device)
+                    mask = mask[0]
+                    pred = model(img)
+
+                    plt.figure(figsize=(12,12))
+                    plt.subplot(1,3,1)
+                    plt.imshow(np.squeeze(img.cpu().numpy()).transpose(1,2,0))
+                    plt.title('Original Image')
+                    plt.subplot(1,3,2)
+                    plt.imshow((mask.cpu().numpy()).transpose(1,2,0).squeeze(axis=2), alpha=0.5)
+                    plt.title('Original Mask')
+                    plt.subplot(1,3,3)
+                    plt.imshow(np.squeeze(pred.cpu()) > .5)
+                    plt.title('Prediction')
+                    plt.show()
+
+                    model.train()
+
+                
+        model.eval()
+        
+        with torch.no_grad():     #Record and print average validation loss for each epoch 
+            for val_batch, (val_images, val_targets) in enumerate(val_dataloader):
+                val_images = val_images.to(device)
+                val_targets = val_targets.to(device)
+                val_pred = model(val_images.detach())
+
+                val_loss = dc_loss(val_pred, val_targets).item()
+
+                val_losses.append(val_loss)
+
+            epoch_avg_train_loss = np.average(train_losses)
+            epoch_avg_val_loss = np.average(val_losses)
+            avg_train_losses.append(epoch_avg_train_loss)
+            avg_val_losses.append(epoch_avg_val_loss)
+
+            print_msg = (f'train_loss: {epoch_avg_train_loss:.5f} ' + f'valid_loss: {epoch_avg_val_loss:.5f}')
+
+            print(print_msg)
+        
+        if epoch > 5:     #Early stopping with a patience of 1 and a minimum of 5 epochs 
+            if avg_val_losses[-1]>=avg_val_losses[-2]:
+                print("Early Stopping Triggered With Patience 1")
+                torch.save(model.state_dict(), PATH)
+                earlystopping = True 
+        if earlystopping:
+            break
+
+    return  model, avg_train_losses, avg_val_losses
+
+# best_model, avg_train_losses, avg_val_losses = train(model, epochs)
+
+test_model = UNet().to(device)
+test_model.load_state_dict(torch.load(PATH))
+
+
+for i in range(10):
+    model.eval()
+    (img, mask) = next(iter(test_dataloader))
+    img = img.to(device)
+    mask = mask.to(device)
+    mask = mask[0]
+    pred = model(img)
+    plt.figure(figsize=(12,12))
+    plt.subplot(1,3,1)
+    plt.imshow(np.squeeze(img.cpu().numpy()).transpose(1,2,0))
+    plt.title('Original Image')
+    plt.subplot(1,3,2)
+    plt.imshow((mask.cpu().numpy()).transpose(1,2,0).squeeze(axis=2), alpha=0.5)
+    plt.title('Original Mask')
+    plt.subplot(1,3,3)
+    plt.imshow(np.squeeze(pred.cpu()) > .5)
+    plt.title('Prediction')
+    plt.show()
