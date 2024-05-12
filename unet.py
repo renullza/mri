@@ -202,3 +202,4 @@ optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.9,0.999))
 
 #Load a preexisting set of weights if continuting training
 model.load_state_dict(torch.load(PATH))
+print('doom')
