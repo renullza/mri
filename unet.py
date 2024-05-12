@@ -195,7 +195,7 @@ class UNet(nn.Module):
         
         return x
 
-#Initialize the model and optimizer
+#Initialize the model and optimizer 
 #develope  this section later
 model = UNet().to(device)
 optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.9,0.999))
