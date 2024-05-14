@@ -2,17 +2,14 @@ import random
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import cv2
 from tqdm import tqdm
-import time
 from glob import glob
-from itertools import chain
+# from itertools import chain
 from skimage.io import imread, imshow, concatenate_images
 from skimage.transform import resize
 from skimage.morphology import label
 from sklearn.model_selection import train_test_split
 import torch
-import torchvision
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
@@ -22,14 +19,11 @@ from torch.utils.data import Dataset
 from PIL import Image
 
 # end of imports
-
 PATH = "D:/projects/mri/weights/model_state_dict.pt"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-if torch.cuda.is_available():
-    print("using gpu")
-else:
-    print("using cpu")
+
+print('Using GPU') if torch.cuda.is_available() else print('CPU')
 
 bs_train, bs_val, bs_test = 16, 8, 1
 epochs = 100
@@ -38,8 +32,8 @@ lr = 0.0001
 train_files = []
 mask_files = glob('D:/projects/mri/kaggle/lgg-mri-segmentation/kaggle_3m/*/*_mask*')
 
-for i in mask_files:
-    train_files.append(i.replace('_mask',''))
+
+[train_files.append(i.replace('_mask','')) for i in mask_files]
 
 #sample plot
 # rows,cols=3,3
@@ -258,7 +252,7 @@ def train(model, epochs):
                     plt.subplot(1,3,3)
                     plt.imshow(np.squeeze(pred.cpu()) > .5)
                     plt.title('Prediction')
-                    plt.show()
+                    # plt.show()
 
                     model.train()
 
@@ -293,28 +287,57 @@ def train(model, epochs):
             break
 
     return  model, avg_train_losses, avg_val_losses
-
-# best_model, avg_train_losses, avg_val_losses = train(model, epochs)
+#  Train model
+best_model, avg_train_losses, avg_val_losses = train(model, epochs)
 
 test_model = UNet().to(device)
 test_model.load_state_dict(torch.load(PATH))
 
+# for i in range(3):
+# model.eval()
+# (img, mask) = next(iter(test_dataloader))
+# img = img.to(device)
+# mask = mask.to(device)
+# mask = mask[0]
+# pred = model(img)
+# plt.figure(figsize=(12,12))
+# plt.subplot(1,3,1)
+# plt.imshow(np.squeeze(img.cpu().numpy()).transpose(1,2,0))
+# plt.title('Original Image')
+# plt.subplot(1,3,2)
+# plt.imshow((mask.cpu().numpy()).transpose(1,2,0).squeeze(axis=2), alpha=0.5)
+# plt.title('Original Mask')
+# plt.subplot(1,3,3)
+# plt.imshow(np.squeeze(pred.cpu()) > .5)
+# plt.title('Prediction')
+# plt.show()
 
-for i in range(10):
-    model.eval()
-    (img, mask) = next(iter(test_dataloader))
+# Load multiple images and masks
+model.eval()
+num_samples = 3
+test_iterator = iter(test_dataloader)
+imgs_masks = [next(test_iterator) for _ in range(num_samples)]
+
+plt.figure(figsize=(12, 12))
+
+for i, (img, mask) in enumerate(imgs_masks):
     img = img.to(device)
     mask = mask.to(device)
     mask = mask[0]
+    
     pred = model(img)
-    plt.figure(figsize=(12,12))
-    plt.subplot(1,3,1)
-    plt.imshow(np.squeeze(img.cpu().numpy()).transpose(1,2,0))
+    
+    plt.subplot(num_samples, 3, 3*i+1)
+    plt.imshow(np.squeeze(img.cpu().numpy()).transpose(1, 2, 0))
     plt.title('Original Image')
-    plt.subplot(1,3,2)
-    plt.imshow((mask.cpu().numpy()).transpose(1,2,0).squeeze(axis=2), alpha=0.5)
+    
+    plt.subplot(num_samples, 3, 3*i+2)
+    plt.imshow((mask.cpu().numpy()).transpose(1, 2, 0).squeeze(axis=2), alpha=0.5)
     plt.title('Original Mask')
-    plt.subplot(1,3,3)
+    
+    plt.subplot(num_samples, 3, 3*i+3)
     plt.imshow(np.squeeze(pred.cpu()) > .5)
     plt.title('Prediction')
-    plt.show()
+
+plt.show()
+
