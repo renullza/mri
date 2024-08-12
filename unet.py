@@ -1,6 +1,6 @@
 import random
 import pandas as pd
-import numpy as np
+import numpy as np #d
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from glob import glob
